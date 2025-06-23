@@ -2,120 +2,125 @@
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { LineChartIcon, CandlestickChartIcon, Info } from 'lucide-react';
-import { CartesianGrid, Line, LineChart as RechartsLineChart, XAxis, YAxis, ResponsiveContainer, ComposedChart } from 'recharts';
+import { Bar, BarChart, CartesianGrid, ComposedChart, Line, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine, Cell } from 'recharts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { LineChartDataPoint, CandlestickDataPoint, TradingSignal } from '@/types';
 import { useState, useEffect, useMemo } from 'react';
+import { cn } from '@/lib/utils';
+
+const SMA_PERIOD = 10;
+
+const calculateSMA = (data: { price: number }[], period: number): (number | undefined)[] => {
+  if (data.length < period) return Array(data.length).fill(undefined);
+
+  const sma: (number | undefined)[] = Array(period - 1).fill(undefined);
+  for (let i = period - 1; i < data.length; i++) {
+    const sum = data.slice(i - period + 1, i + 1).reduce((acc, val) => acc + val.price, 0);
+    sma.push(parseFloat((sum / period).toFixed(2)));
+  }
+  return sma;
+};
+
 
 const generateDynamicLineData = (currentPrice?: number, coinSymbol: string = 'Token'): LineChartDataPoint[] => {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-  let basePriceRandomizer = 50000;
-  let volatilityRandomizer = 8000;
-  if (coinSymbol === 'ETH') {
-    basePriceRandomizer = 3000;
-    volatilityRandomizer = 500;
-  } else if (coinSymbol === 'SOL') {
-    basePriceRandomizer = 150;
-    volatilityRandomizer = 30;
-  } else if (currentPrice && currentPrice < 500 && currentPrice > 0) { 
-    basePriceRandomizer = currentPrice * 0.8;
-    volatilityRandomizer = currentPrice * 0.2;
-  } else if (currentPrice === 0) {
-    basePriceRandomizer = 10;
-    volatilityRandomizer = 2;
-  } else if (coinSymbol !== 'BTC') {
-    basePriceRandomizer = 100;
-    volatilityRandomizer = 20;
-  }
-
-
-  let lastPrice = currentPrice 
-    ? currentPrice - (Math.random() * (basePriceRandomizer*0.1) - (basePriceRandomizer*0.05)) * 5 
-    : basePriceRandomizer + Math.random() * (basePriceRandomizer*0.2) - (basePriceRandomizer*0.1); 
+  const data: { date: string; price: number; volume: number; sma?: number; name?: string }[] = [];
+  const numPoints = 40;
   
-  lastPrice = Math.max(0.000001, lastPrice); // Ensure price is positive
-
-  const data: LineChartDataPoint[] = [];
-  const priceName = `${coinSymbol} Price`;
-
-  for (let i = 0; i < months.length -1; i++) {
-     const change = Math.random() * volatilityRandomizer - (volatilityRandomizer/2);
-     lastPrice = Math.max(0.000001, lastPrice + change); 
-     data.push({ date: months[i], price: parseFloat(lastPrice.toFixed(Math.max(2, (lastPrice < 1 ? 6 : 2)))), name: priceName });
+  let basePrice = currentPrice || 50000;
+  if (!currentPrice) {
+    if (coinSymbol === 'ETH') basePrice = 3000;
+    else if (coinSymbol === 'SOL') basePrice = 150;
+    else if (coinSymbol !== 'BTC') basePrice = 100;
   }
 
-  if (currentPrice !== undefined) {
-    data.push({ date: months[months.length -1], price: parseFloat(currentPrice.toFixed(Math.max(2, (currentPrice < 1 ? 6 : 2)))), name: `${priceName} (Current)` });
-  } else {
-    const change = Math.random() * volatilityRandomizer - (volatilityRandomizer/2);
-    lastPrice = Math.max(0.000001, lastPrice + change);
-    data.push({ date: months[months.length -1], price: parseFloat(lastPrice.toFixed(Math.max(2, (lastPrice < 1 ? 6 : 2)))), name: priceName });
+  let lastPrice = basePrice * (1 - (Math.random() * 0.2)); 
+  const trend = (basePrice - lastPrice) / numPoints;
+
+  for (let i = 0; i < numPoints; i++) {
+    const volatility = (Math.random() - 0.5) * lastPrice * 0.03;
+    let newPrice = lastPrice + trend + volatility;
+    newPrice = Math.max(0.000001, newPrice);
+    
+    const volumeVolatility = Math.random();
+    const baseVolume = 10000000;
+    const volume = baseVolume * (1 + volatility) * (1 + volumeVolatility);
+
+    data.push({
+      date: `Day ${i + 1}`,
+      price: parseFloat(newPrice.toFixed(Math.max(2, newPrice < 1 ? 6 : 2))),
+      volume: parseFloat(volume.toFixed(0)),
+    });
+    lastPrice = newPrice;
   }
-  return data;
+  
+  data[numPoints - 1].price = parseFloat(basePrice.toFixed(Math.max(2, basePrice < 1 ? 6 : 2)));
+  data[numPoints - 1].name = `Current`;
+  
+  const smaValues = calculateSMA(data, SMA_PERIOD);
+  return data.map((d, i) => ({ ...d, sma: smaValues[i] }));
 };
 
 const generateDynamicCandlestickData = (currentPrice?: number, coinSymbol: string = 'Token'): CandlestickDataPoint[] => {
-  const data: CandlestickDataPoint[] = [];
-  let currentDate = new Date();
-  currentDate.setDate(currentDate.getDate() - 5); 
+    const data: CandlestickDataPoint[] = [];
+    const numPoints = 40;
 
-  let basePrice = 60000;
-  let fluctuation = 2000;
-  if (coinSymbol === 'ETH') { basePrice = 3000; fluctuation = 100;}
-  else if (coinSymbol === 'SOL') { basePrice = 150; fluctuation = 10;}
-  else if (currentPrice && currentPrice < 500 && currentPrice > 0) {basePrice = currentPrice; fluctuation = currentPrice * 0.1}
-  else if (currentPrice === 0) {basePrice = 10; fluctuation = 1;}
-  else if (coinSymbol !== 'BTC') {basePrice = 100; fluctuation = 20;}
-  
-  let lastClose = currentPrice ? currentPrice * (1 - (Math.random() * 0.1 - 0.05)) : basePrice + Math.random() * (basePrice*0.1) - (basePrice*0.05);
-  lastClose = Math.max(0.000001, lastClose);
+    let basePrice = currentPrice || 60000;
+    if (!currentPrice) {
+        if (coinSymbol === 'ETH') basePrice = 3000;
+        else if (coinSymbol === 'SOL') basePrice = 150;
+        else if (coinSymbol !== 'BTC') basePrice = 100;
+    }
 
+    let lastClose = basePrice * (1 - (Math.random() * 0.1));
+    const trend = (basePrice - lastClose) / numPoints;
 
-  for (let i = 0; i < 4; i++) { 
-    const open = parseFloat(lastClose.toFixed(Math.max(2, (lastClose < 1 ? 6 : 2))));
-    const high = parseFloat((open + Math.random() * fluctuation).toFixed(Math.max(2, (open < 1 ? 6 : 2))));
-    const lowCandle = parseFloat((open - Math.random() * fluctuation).toFixed(Math.max(2, (open < 1 ? 6 : 2))));
-    const low = Math.max(0.000001, lowCandle); 
-    const close = parseFloat((low + Math.random() * (high - low)).toFixed(Math.max(2, (low < 1 ? 6 : 2))));
-    lastClose = close;
+    for (let i = 0; i < numPoints; i++) {
+        const open = parseFloat(lastClose.toFixed(Math.max(2, lastClose < 1 ? 6 : 2)));
+        const volatility = open * 0.03;
+        let close = open + trend + (Math.random() - 0.45) * volatility * 2;
+        const high = Math.max(open, close) + Math.random() * volatility;
+        const low = Math.min(open, close) - Math.random() * volatility;
+        close = Math.max(0.000001, close);
+        
+        const volumeVolatility = Math.random();
+        const baseVolume = 10000000;
+        const volume = baseVolume * (1 + Math.abs(close - open) / open) * (1 + volumeVolatility);
+
+        data.push({
+            date: `Day ${i + 1}`,
+            open: open,
+            high: parseFloat(high.toFixed(Math.max(2, high < 1 ? 6 : 2))),
+            low: parseFloat(Math.max(0.000001, low).toFixed(Math.max(2, low < 1 ? 6 : 2))),
+            close: parseFloat(close.toFixed(Math.max(2, close < 1 ? 6 : 2))),
+            volume: parseFloat(volume.toFixed(0)),
+        });
+        lastClose = close;
+    }
     
-    data.push({
-      date: currentDate.toISOString().split('T')[0], 
-      open, high, low, close,
-      name: `${coinSymbol} OHLC`
-    });
-    currentDate.setDate(currentDate.getDate() + 1);
-  }
+    data[numPoints - 1].close = parseFloat(basePrice.toFixed(Math.max(2, basePrice < 1 ? 6 : 2)));
+    data[numPoints - 1].name = `Current`;
 
-   if (currentPrice !== undefined) {
-    const open = parseFloat(lastClose.toFixed(Math.max(2, (lastClose < 1 ? 6 : 2))));
-    const highVal = Math.max(open, currentPrice, open + Math.random() * fluctuation * 0.5);
-    const lowCandle = Math.min(open, currentPrice, open - Math.random() * fluctuation * 0.5);
-    const lowVal = Math.max(0.000001, lowCandle);
-    data.push({
-      date: currentDate.toISOString().split('T')[0],
-      open, 
-      high: parseFloat(highVal.toFixed(Math.max(2, (open < 1 ? 6 : 2)))), 
-      low: parseFloat(lowVal.toFixed(Math.max(2, (open < 1 ? 6 : 2)))), 
-      close: parseFloat(currentPrice.toFixed(Math.max(2, (currentPrice < 1 ? 6 : 2)))),
-      name: `${coinSymbol} OHLC (Current)`
-    });
-  } else { 
-    const open = parseFloat(lastClose.toFixed(Math.max(2, (lastClose < 1 ? 6 : 2))));
-    const high = parseFloat((open + Math.random() * fluctuation).toFixed(Math.max(2, (open < 1 ? 6 : 2))));
-    const lowCandle = parseFloat((open - Math.random() * fluctuation).toFixed(Math.max(2, (open < 1 ? 6 : 2))));
-    const low = Math.max(0.000001, lowCandle);
-    const close = parseFloat((low + Math.random() * (high - low)).toFixed(Math.max(2, (low < 1 ? 6 : 2))));
-     data.push({
-      date: currentDate.toISOString().split('T')[0], 
-      open, high, low, close,
-      name: `${coinSymbol} OHLC`
-    });
-  }
-  return data;
+    return data;
 };
+
+
+const Candlestick = (props: any) => {
+  const { x, y, width, height, low, high, open, close } = props;
+  const isRising = close >= open;
+  const color = isRising ? 'hsl(var(--accent))' : 'hsl(var(--destructive))';
+  const wickColor = isRising ? 'hsl(var(--accent) / 0.7)' : 'hsl(var(--destructive) / 0.7)';
+
+  return (
+    <g stroke={wickColor} fill={color} strokeWidth="1">
+      <path d={`M ${x + width / 2},${y + height} L ${x + width / 2},${y}`} />
+      <path d={`M ${x + width / 2},${high} L ${x + width / 2},${low}`} />
+      <rect x={x} y={y} width={width} height={height} />
+    </g>
+  );
+};
+
 
 interface ChartDisplayProps {
   signals: TradingSignal[];
@@ -123,6 +128,66 @@ interface ChartDisplayProps {
   selectedCoinSymbol: string;
   selectedCoinName: string;
 }
+
+const yAxisTickFormatter = (value: number, forVolume: boolean = false) => {
+    if (value === 0) return forVolume ? '0' : '$0';
+    if (forVolume) {
+        if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
+        if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+        if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`;
+        return value.toFixed(0);
+    } else {
+        if (Math.abs(value) < 0.000001) return `$${value.toExponential(2)}`;
+        if (Math.abs(value) < 0.01) return `$${value.toFixed(6)}`;
+        if (Math.abs(value) < 1) return `$${value.toFixed(4)}`;
+        if (Math.abs(value) < 100) return `$${value.toFixed(2)}`;
+        if (Math.abs(value) >= 1000 && Math.abs(value) < 1000000) return `$${(value/1000).toFixed(1)}k`;
+        return `$${value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    }
+};
+
+const CustomTooltipContent = ({ active, payload, label, coinSymbol }: any) => {
+    if (active && payload && payload.length) {
+        const data = payload[0].payload;
+        const priceData = payload.find(p => p.dataKey === 'price')?.payload;
+        const ohlcData = payload.find(p => p.dataKey === 'close')?.payload;
+        const isCandle = !!ohlcData;
+        const isRising = isCandle ? ohlcData.close >= ohlcData.open : (payload[0].value > (payload[0]?.payload?.sma || 0));
+
+        return (
+            <div className="rounded-lg border bg-background/90 backdrop-blur-sm p-2.5 shadow-sm min-w-[180px] text-xs">
+                <p className="mb-2 text-sm font-medium text-center">{label}</p>
+                <div className="space-y-1.5">
+                    {isCandle ? (
+                        <>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Open:</span> <span className="font-semibold">${ohlcData.open.toLocaleString()}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">High:</span> <span className="font-semibold">${ohlcData.high.toLocaleString()}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Low:</span> <span className="font-semibold">${ohlcData.low.toLocaleString()}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Close:</span> <span className="font-semibold">${ohlcData.close.toLocaleString()}</span></div>
+                        </>
+                    ) : (
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Price:</span>
+                            <span className="font-semibold">${Number(priceData.price).toLocaleString()}</span>
+                        </div>
+                    )}
+                    {priceData?.sma && (
+                         <div className="flex justify-between">
+                             <span className="text-muted-foreground">SMA ({SMA_PERIOD}):</span>
+                             <span className="font-semibold">${Number(priceData.sma).toLocaleString()}</span>
+                         </div>
+                    )}
+                    <div className="flex justify-between">
+                        <span className="text-muted-foreground">Volume:</span>
+                        <span className="font-semibold">{yAxisTickFormatter(data.volume, true)}</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+    return null;
+};
+
 
 export function ChartDisplay({ signals, marketData, selectedCoinSymbol, selectedCoinName }: ChartDisplayProps) {
   const currentCoinPrice = marketData?.[selectedCoinSymbol];
@@ -134,69 +199,56 @@ export function ChartDisplay({ signals, marketData, selectedCoinSymbol, selected
     const newPrice = marketData?.[selectedCoinSymbol];
     setDynamicLineData(generateDynamicLineData(newPrice, selectedCoinSymbol));
     setDynamicCandlestickData(generateDynamicCandlestickData(newPrice, selectedCoinSymbol));
-  }, [signals, marketData, selectedCoinSymbol]);
+  }, [marketData, selectedCoinSymbol]);
   
-  const lineChartConfig = useMemo(() => ({
-    price: {
-      label: `${selectedCoinSymbol} Price (USD)`,
-      color: 'hsl(var(--accent))',
-    },
+  const chartConfig = useMemo(() => ({
+    price: { label: `${selectedCoinSymbol} Price`, color: 'hsl(var(--primary))' },
+    sma: { label: `SMA (${SMA_PERIOD})`, color: 'hsl(var(--chart-3))' },
+    volume: { label: 'Volume' },
   }), [selectedCoinSymbol]) satisfies ChartConfig;
 
-  const candlestickChartConfig = useMemo(() => ({
-    open: { label: 'Open', color: 'hsl(var(--chart-1))' },
-    high: { label: 'High', color: 'hsl(var(--chart-2))' },
-    low: { label: 'Low', color: 'hsl(var(--chart-3))' },
-    close: { label: 'Close', color: 'hsl(var(--chart-4))' },
-  }), []) satisfies ChartConfig;
-
-  const rechartsCandlestickData = useMemo(() => 
-    dynamicCandlestickData.map(d => ({
-      x: new Date(d.date).getTime(), 
-      open: d.open,
-      high: d.high,
-      low: d.low,
-      close: d.close,
-      name: d.name 
-    })), 
-  [dynamicCandlestickData]);
-  
-  const yAxisTickFormatter = (value: number) => {
-    if (value === 0) return '$0';
-    if (Math.abs(value) < 0.000001 && value !== 0) return `$${value.toExponential(2)}`;
-    if (Math.abs(value) < 0.01) return `$${value.toFixed(6)}`;
-    if (Math.abs(value) < 1) return `$${value.toFixed(4)}`;
-    if (Math.abs(value) < 100) return `$${value.toFixed(2)}`;
-    if (Math.abs(value) >= 1000 && Math.abs(value) < 1000000) return `$${(value/1000).toFixed(1)}k`;
-    if (Math.abs(value) >= 1000000) return `$${(value/1000000).toFixed(1)}M`;
-    return `$${value.toFixed(0)}`;
-  };
-
   const yAxisDomain = useMemo(() => {
-    const linePrices = dynamicLineData.map(d => d.price);
-    const candlePrices = dynamicCandlestickData.flatMap(d => [d.open, d.high, d.low, d.close]);
-    const allPrices = [...linePrices, ...candlePrices].filter(p => typeof p === 'number' && isFinite(p));
-
-    if (allPrices.length === 0 && (currentCoinPrice === undefined || !isFinite(currentCoinPrice))) return ['auto', 'auto'];
+    const linePrices = dynamicLineData.flatMap(d => [d.price, d.sma]).filter(p => p !== undefined) as number[];
+    const candleHighs = dynamicCandlestickData.map(d => d.high);
+    const candleLows = dynamicCandlestickData.map(d => d.low);
+    const signalPrices = signals.flatMap(s => [s.entryPrice, s.targetPrice, s.stopLossPrice]);
     
-    const minPrice = Math.min(...allPrices, currentCoinPrice !== undefined && isFinite(currentCoinPrice) ? currentCoinPrice : Infinity);
-    const maxPrice = Math.max(...allPrices, currentCoinPrice !== undefined && isFinite(currentCoinPrice) ? currentCoinPrice : -Infinity);
+    const allPrices = [...linePrices, ...candleHighs, ...candleLows, ...signalPrices].filter(p => typeof p === 'number' && isFinite(p));
+    if (currentCoinPrice !== undefined && isFinite(currentCoinPrice)) {
+      allPrices.push(currentCoinPrice);
+    }
+    
+    if (allPrices.length === 0) return ['auto', 'auto'];
+    
+    const minPrice = Math.min(...allPrices);
+    const maxPrice = Math.max(...allPrices);
 
-    if (minPrice === Infinity || maxPrice === -Infinity || minPrice === maxPrice) {
-      const base = minPrice !== Infinity && isFinite(minPrice) ? minPrice : (currentCoinPrice !== undefined && isFinite(currentCoinPrice) ? currentCoinPrice : 100);
-      const padding = base === 0 ? 1 : Math.abs(base * 0.1);
-      return [Math.max(0, base - padding), base + padding];
+    if (minPrice === maxPrice) {
+      const padding = minPrice === 0 ? 1 : Math.abs(minPrice * 0.1);
+      return [Math.max(0, minPrice - padding), maxPrice + padding];
     }
 
     const range = maxPrice - minPrice;
-    const padding = range === 0 ? Math.abs(maxPrice * 0.1) || 1 : range * 0.15; // Add a fallback if range is 0
+    const padding = range === 0 ? Math.abs(maxPrice * 0.1) || 1 : range * 0.15;
 
     return [Math.max(0, minPrice - padding), maxPrice + padding];
-  }, [dynamicLineData, dynamicCandlestickData, currentCoinPrice]);
+  }, [dynamicLineData, dynamicCandlestickData, signals, currentCoinPrice]);
 
+  const uniqueSignals = useMemo(() => {
+      const seen = new Set();
+      return signals.filter(signal => {
+          const identifier = `${signal.signalType}-${signal.entryPrice}-${signal.targetPrice}-${signal.stopLossPrice}`;
+          if (seen.has(identifier)) {
+              return false;
+          } else {
+              seen.add(identifier);
+              return true;
+          }
+      });
+  }, [signals]);
 
   return (
-    <Card className="shadow-card hover:shadow-card-hover transition-shadow duration-300 col-span-1 md:col-span-2">
+    <Card className="shadow-card hover:shadow-card-hover transition-shadow duration-300 col-span-1 lg:col-span-2">
       <CardHeader className="pb-4">
         <div className="flex items-center space-x-3">
           <LineChartIcon className="h-7 w-7 text-primary" />
@@ -213,97 +265,117 @@ export function ChartDisplay({ signals, marketData, selectedCoinSymbol, selected
               <LineChartIcon className="mr-2 h-4 w-4" /> Price Trend
             </TabsTrigger>
             <TabsTrigger value="candlestick">
-              <CandlestickChartIcon className="mr-2 h-4 w-4" /> OHLC Data
+              <CandlestickChartIcon className="mr-2 h-4 w-4" /> Candlestick
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="line">
-            <ChartContainer config={lineChartConfig} className="h-[350px] w-full">
-              <RechartsLineChart data={dynamicLineData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" tick={{fontSize: 12}} />
+          <TabsContent value="line" className="space-y-1">
+            <ChartContainer config={chartConfig} className="h-[280px] w-full">
+              <ComposedChart data={dynamicLineData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }} syncId="marketChart">
+                 <defs>
+                    <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-price)" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="var(--color-price)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3" />
+                <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} tick={{fontSize: 12}} stroke="hsl(var(--muted-foreground))" hide/>
                 <YAxis 
+                    orientation="right"
                     stroke="hsl(var(--muted-foreground))" 
                     domain={yAxisDomain as [number,number]} 
-                    tickFormatter={yAxisTickFormatter}
+                    tickFormatter={(val) => yAxisTickFormatter(val, false)}
                     allowDataOverflow={true}
                     tick={{fontSize: 12}}
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
                     width={70}
                 />
-                <ChartTooltip
+                <Tooltip
                   cursor={{stroke: 'hsl(var(--primary))', strokeDasharray: '3 3'}}
-                  content={<ChartTooltipContent 
-                    hideLabel 
-                    formatter={(value, name, props) => {
-                        const numericValue = Number(value);
-                        return (
-                            <div className="flex flex-col text-xs">
-                                <span className="font-bold">{props.payload?.name || `${selectedCoinSymbol} Price`}</span>
-                                <span>{props.payload?.date}: ${numericValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: Math.max(2, (numericValue < 1 ? 6 : 2))})}</span>
-                            </div>
-                        )
-                    }}
-                    itemStyle={{color: 'hsl(var(--foreground))'}}
-                    labelStyle={{fontWeight: 'bold', color: 'hsl(var(--primary))'}}
-                  />}
+                  content={<CustomTooltipContent coinSymbol={selectedCoinSymbol} />}
                 />
-                <Line type="monotone" dataKey="price" stroke="var(--color-price)" strokeWidth={2.5} dot={{r: 3, fill: 'var(--color-price)', strokeWidth:1, stroke: 'hsl(var(--background))'}} activeDot={{r:5, fill: 'var(--color-price)', stroke: 'hsl(var(--background))'}} name={`${selectedCoinSymbol} Price`} />
-                <ChartLegend content={<ChartLegendContent wrapperStyle={{paddingTop: '10px'}}/>} />
-              </RechartsLineChart>
+                <Area type="natural" dataKey="price" fill="url(#chartGradient)" stroke="none" />
+                <Line type="natural" dataKey="price" stroke="var(--color-price)" strokeWidth={2.5} dot={false} activeDot={{r:5, fill: 'var(--color-price)', stroke: 'hsl(var(--background))'}} name={`${selectedCoinSymbol} Price`} />
+                <Line type="natural" dataKey="sma" stroke="var(--color-sma)" strokeWidth={1.5} dot={false} name={`SMA (${SMA_PERIOD})`} />
+
+                {uniqueSignals.map((signal, index) => [
+                    signal.entryPrice && <ReferenceLine key={`entry-${index}`} y={signal.entryPrice} label={{ value: `Entry`, position: 'insideTopLeft', fill: 'hsl(var(--foreground))', fontSize: 10 }} stroke="hsl(var(--primary))" strokeDasharray="3 3" />,
+                    signal.targetPrice && <ReferenceLine key={`target-${index}`} y={signal.targetPrice} label={{ value: `Target`, position: 'insideTopLeft', fill: 'hsl(var(--accent-foreground))', fontSize: 10 }} stroke="hsl(var(--accent))" strokeDasharray="3 3" />,
+                    signal.stopLossPrice && <ReferenceLine key={`stop-${index}`} y={signal.stopLossPrice} label={{ value: `Stop`, position: 'insideTopLeft', fill: 'hsl(var(--destructive-foreground))', fontSize: 10 }} stroke="hsl(var(--destructive))" strokeDasharray="3 3" />
+                ])}
+              </ComposedChart>
+            </ChartContainer>
+            <ChartContainer config={chartConfig} className="h-[100px] w-full">
+              <BarChart data={dynamicLineData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }} syncId="marketChart">
+                 <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3"/>
+                  <XAxis dataKey="date" tickLine={false} axisLine={true} tickMargin={8} tick={{fontSize: 12}} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis 
+                    orientation="right" 
+                    tickFormatter={(val) => yAxisTickFormatter(val, true)} 
+                    tickLine={false} 
+                    axisLine={false} 
+                    tick={{fontSize: 12}} 
+                    tickMargin={8} 
+                    width={70}
+                  />
+                  <Tooltip content={() => null} />
+                  <Bar dataKey="volume">
+                    {dynamicLineData.map((entry, index) => {
+                       const prevPrice = index > 0 ? dynamicLineData[index - 1].price : entry.price;
+                       const color = entry.price >= prevPrice ? 'hsl(var(--accent))' : 'hsl(var(--destructive))';
+                       return <Cell key={`cell-${index}`} fill={color} />;
+                    })}
+                  </Bar>
+              </BarChart>
             </ChartContainer>
           </TabsContent>
-          <TabsContent value="candlestick">
-             <ChartContainer config={candlestickChartConfig} className="h-[350px] w-full">
-                <ComposedChart data={rechartsCandlestickData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))"/>
-                    <XAxis 
-                        dataKey="x" 
-                        type="number"
-                        scale="time"
-                        domain={['dataMin', 'dataMax']}
-                        tickFormatter={(unixTime) => new Date(unixTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        stroke="hsl(var(--muted-foreground))"
-                        tick={{fontSize: 12}}
-                    />
+          <TabsContent value="candlestick" className="space-y-1">
+             <ChartContainer config={{}} className="h-[280px] w-full">
+                <ComposedChart data={dynamicCandlestickData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }} syncId="marketChart">
+                    <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3"/>
+                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} tick={{fontSize: 12}} stroke="hsl(var(--muted-foreground))" hide />
                     <YAxis 
+                        orientation="right"
                         stroke="hsl(var(--muted-foreground))" 
                         domain={yAxisDomain as [number,number]}
-                        orientation="left"
-                        tickFormatter={yAxisTickFormatter}
+                        tickFormatter={(val) => yAxisTickFormatter(val, false)}
                         allowDataOverflow={true}
                         tick={{fontSize: 12}}
+                        tickLine={false}
+                        axisLine={false}
+                        tickMargin={8}
                         width={70}
                     />
-                    <ChartTooltip
+                    <Tooltip
                       cursor={{stroke: 'hsl(var(--primary))', strokeDasharray: '3 3'}}
-                      content={
-                        <ChartTooltipContent
-                          labelFormatter={(label, payload) => { 
-                            if (payload && payload.length > 0 && typeof payload[0].payload.x === 'number') {
-                               return new Date(payload[0].payload.x).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                            }
-                            return String(label);
-                          }}
-                           formatter={(value, name, props) => {
-                                const numericValue = Number(value);
-                                const formattedValue = typeof numericValue === 'number' ? `$${numericValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: Math.max(2, (numericValue < 1 ? 6 : 2))})}` : value;
-                                return [formattedValue, name?.toString().charAt(0).toUpperCase() + name?.toString().slice(1) || 'value'];
-                            }}
-                            itemStyle={{color: 'hsl(var(--foreground))'}}
-                            labelStyle={{fontWeight: 'bold', color: 'hsl(var(--primary))'}}
-                        />
-                      }
+                      content={<CustomTooltipContent coinSymbol={selectedCoinSymbol} />}
                     />
-                    <Line type="monotone" dataKey="open" stroke="var(--color-open)" name="Open" dot={false} strokeWidth={1.5}/>
-                    <Line type="monotone" dataKey="high" stroke="var(--color-high)" name="High" dot={false} strokeWidth={1.5}/>
-                    <Line type="monotone" dataKey="low" stroke="var(--color-low)" name="Low" dot={false} strokeWidth={1.5}/>
-                    <Line type="monotone" dataKey="close" stroke="var(--color-close)" name="Close" dot={{r: 3, fill: 'var(--color-close)', strokeWidth:1, stroke: 'hsl(var(--background))'}} activeDot={{r:5, fill: 'var(--color-close)', stroke: 'hsl(var(--background))'}} strokeWidth={2}/>
-                    <ChartLegend content={<ChartLegendContent wrapperStyle={{paddingTop: '10px'}}/>} />
+                    <Bar dataKey="close" shape={<Candlestick />} />
                 </ComposedChart>
             </ChartContainer>
-            <div className="mt-4 p-3 border border-dashed border-border/70 rounded-md flex items-start text-sm text-muted-foreground bg-muted/30">
-              <Info size={18} className="mr-2.5 mt-0.5 shrink-0 text-primary" />
-              <span>OHLC (Open, High, Low, Close) data for {selectedCoinName} displayed as separate lines. This is simulated dynamic data. Hover over chart points for detailed values.</span>
-            </div>
+             <ChartContainer config={chartConfig} className="h-[100px] w-full">
+              <BarChart data={dynamicCandlestickData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }} syncId="marketChart">
+                  <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3"/>
+                  <XAxis dataKey="date" tickLine={false} axisLine={true} tickMargin={8} tick={{fontSize: 12}} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis
+                    orientation="right"
+                    tickFormatter={(val) => yAxisTickFormatter(val, true)} 
+                    tickLine={false} 
+                    axisLine={false} 
+                    tick={{fontSize: 12}} 
+                    tickMargin={8} 
+                    width={70}
+                  />
+                  <Tooltip content={() => null} />
+                  <Bar dataKey="volume">
+                    {dynamicCandlestickData.map((entry, index) => {
+                       const color = entry.close >= entry.open ? 'hsl(var(--accent))' : 'hsl(var(--destructive))';
+                       return <Cell key={`cell-${index}`} fill={color} />;
+                    })}
+                  </Bar>
+              </BarChart>
+            </ChartContainer>
           </TabsContent>
         </Tabs>
       </CardContent>
