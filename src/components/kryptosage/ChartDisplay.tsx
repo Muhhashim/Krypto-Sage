@@ -2,13 +2,12 @@
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
-import { LineChartIcon, CandlestickChartIcon, Info } from 'lucide-react';
+import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart';
+import { LineChartIcon, CandlestickChartIcon } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ComposedChart, Line, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine, Cell } from 'recharts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { LineChartDataPoint, CandlestickDataPoint, TradingSignal } from '@/types';
 import { useState, useEffect, useMemo } from 'react';
-import { cn } from '@/lib/utils';
 
 const SMA_PERIOD = 10;
 
@@ -146,41 +145,42 @@ const yAxisTickFormatter = (value: number, forVolume: boolean = false) => {
     }
 };
 
-const CustomTooltipContent = ({ active, payload, label, coinSymbol }: any) => {
+const CustomTooltipContent = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
         const priceData = payload.find(p => p.dataKey === 'price')?.payload;
         const ohlcData = payload.find(p => p.dataKey === 'close')?.payload;
         const isCandle = !!ohlcData;
-        const isRising = isCandle ? ohlcData.close >= ohlcData.open : (payload[0].value > (payload[0]?.payload?.sma || 0));
-
+        
         return (
             <div className="rounded-lg border bg-background/90 backdrop-blur-sm p-2.5 shadow-sm min-w-[180px] text-xs">
                 <p className="mb-2 text-sm font-medium text-center">{label}</p>
                 <div className="space-y-1.5">
                     {isCandle ? (
                         <>
-                            <div className="flex justify-between"><span className="text-muted-foreground">Open:</span> <span className="font-semibold">${ohlcData.open.toLocaleString()}</span></div>
-                            <div className="flex justify-between"><span className="text-muted-foreground">High:</span> <span className="font-semibold">${ohlcData.high.toLocaleString()}</span></div>
-                            <div className="flex justify-between"><span className="text-muted-foreground">Low:</span> <span className="font-semibold">${ohlcData.low.toLocaleString()}</span></div>
-                            <div className="flex justify-between"><span className="text-muted-foreground">Close:</span> <span className="font-semibold">${ohlcData.close.toLocaleString()}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Open:</span> <span className="font-semibold">{yAxisTickFormatter(ohlcData.open)}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">High:</span> <span className="font-semibold">{yAxisTickFormatter(ohlcData.high)}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Low:</span> <span className="font-semibold">{yAxisTickFormatter(ohlcData.low)}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Close:</span> <span className="font-semibold">{yAxisTickFormatter(ohlcData.close)}</span></div>
                         </>
-                    ) : (
+                    ) : priceData ? (
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Price:</span>
-                            <span className="font-semibold">${Number(priceData.price).toLocaleString()}</span>
+                            <span className="font-semibold">{yAxisTickFormatter(priceData.price)}</span>
                         </div>
-                    )}
+                    ) : null}
                     {priceData?.sma && (
                          <div className="flex justify-between">
                              <span className="text-muted-foreground">SMA ({SMA_PERIOD}):</span>
-                             <span className="font-semibold">${Number(priceData.sma).toLocaleString()}</span>
+                             <span className="font-semibold">{yAxisTickFormatter(priceData.sma)}</span>
                          </div>
                     )}
-                    <div className="flex justify-between">
-                        <span className="text-muted-foreground">Volume:</span>
-                        <span className="font-semibold">{yAxisTickFormatter(data.volume, true)}</span>
-                    </div>
+                    {data.volume && (
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Volume:</span>
+                            <span className="font-semibold">{yAxisTickFormatter(data.volume, true)}</span>
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -255,7 +255,7 @@ export function ChartDisplay({ signals, marketData, selectedCoinSymbol, selected
           <CardTitle className="font-headline text-xl">Market Visualization for {selectedCoinName}</CardTitle>
         </div>
         <CardDescription className="mt-1">
-          {currentCoinPrice !== undefined ? `Current ${selectedCoinSymbol} price: $${currentCoinPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: Math.max(2, (currentCoinPrice < 1 ? 6 : 2))})}` : 'Historical data and market trends.'} <span className="text-xs">(Simulated Dynamic Data)</span>
+          {currentCoinPrice !== undefined ? `Current ${selectedCoinSymbol} price: ${yAxisTickFormatter(currentCoinPrice)}` : 'Historical data and market trends.'} <span className="text-xs">(Simulated Dynamic Data)</span>
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -289,11 +289,11 @@ export function ChartDisplay({ signals, marketData, selectedCoinSymbol, selected
                     tickLine={false}
                     axisLine={false}
                     tickMargin={8}
-                    width={70}
+                    width={80}
                 />
                 <Tooltip
                   cursor={{stroke: 'hsl(var(--primary))', strokeDasharray: '3 3'}}
-                  content={<CustomTooltipContent coinSymbol={selectedCoinSymbol} />}
+                  content={<CustomTooltipContent />}
                 />
                 <Area type="natural" dataKey="price" fill="url(#chartGradient)" stroke="none" />
                 <Line type="natural" dataKey="price" stroke="var(--color-price)" strokeWidth={2.5} dot={false} activeDot={{r:5, fill: 'var(--color-price)', stroke: 'hsl(var(--background))'}} name={`${selectedCoinSymbol} Price`} />
@@ -317,14 +317,14 @@ export function ChartDisplay({ signals, marketData, selectedCoinSymbol, selected
                     axisLine={false} 
                     tick={{fontSize: 12}} 
                     tickMargin={8} 
-                    width={70}
+                    width={80}
                   />
-                  <Tooltip content={() => null} />
+                  <Tooltip cursor={false} content={() => null} />
                   <Bar dataKey="volume">
                     {dynamicLineData.map((entry, index) => {
                        const prevPrice = index > 0 ? dynamicLineData[index - 1].price : entry.price;
                        const color = entry.price >= prevPrice ? 'hsl(var(--accent))' : 'hsl(var(--destructive))';
-                       return <Cell key={`cell-${index}`} fill={color} />;
+                       return <Cell key={`cell-${index}`} fill={color} opacity={0.6}/>;
                     })}
                   </Bar>
               </BarChart>
@@ -345,11 +345,11 @@ export function ChartDisplay({ signals, marketData, selectedCoinSymbol, selected
                         tickLine={false}
                         axisLine={false}
                         tickMargin={8}
-                        width={70}
+                        width={80}
                     />
                     <Tooltip
                       cursor={{stroke: 'hsl(var(--primary))', strokeDasharray: '3 3'}}
-                      content={<CustomTooltipContent coinSymbol={selectedCoinSymbol} />}
+                      content={<CustomTooltipContent />}
                     />
                     <Bar dataKey="close" shape={<Candlestick />} />
                 </ComposedChart>
@@ -365,13 +365,13 @@ export function ChartDisplay({ signals, marketData, selectedCoinSymbol, selected
                     axisLine={false} 
                     tick={{fontSize: 12}} 
                     tickMargin={8} 
-                    width={70}
+                    width={80}
                   />
-                  <Tooltip content={() => null} />
+                  <Tooltip cursor={false} content={() => null} />
                   <Bar dataKey="volume">
                     {dynamicCandlestickData.map((entry, index) => {
                        const color = entry.close >= entry.open ? 'hsl(var(--accent))' : 'hsl(var(--destructive))';
-                       return <Cell key={`cell-${index}`} fill={color} />;
+                       return <Cell key={`cell-${index}`} fill={color} opacity={0.6} />;
                     })}
                   </Bar>
               </BarChart>
@@ -382,3 +382,5 @@ export function ChartDisplay({ signals, marketData, selectedCoinSymbol, selected
     </Card>
   );
 }
+
+    
