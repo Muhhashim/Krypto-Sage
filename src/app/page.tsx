@@ -59,6 +59,7 @@ export default function KryptoSageDashboard() {
     const result = await handleGenerateSignalsAction(
       values.coinSymbol, 
       values.tradingTerm,
+      availableCoins,
       values.customizationSettings
     );
 
@@ -76,6 +77,7 @@ export default function KryptoSageDashboard() {
       });
       setSignals([]); 
     } else if (result.signals) {
+      const selectedCoinName = availableCoins.find(c => c.value === values.coinSymbol)?.name || values.coinSymbol;
       if (result.signals.length === 0) {
         toast({
           title: "No Signals Generated",
