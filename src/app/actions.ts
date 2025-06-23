@@ -13,23 +13,54 @@ interface GenerateSignalsResult {
   latestPrices?: { [symbol: string]: number | undefined };
 }
 
+/**
+ * In a real-world application, this function would fetch data from live news APIs,
+ * RSS feeds, or social media APIs (e.g., X/Twitter, Reddit). For this project,
+ * it simulates a real-time news analysis feed to demonstrate the AI's capability
+ * to process and incorporate sentiment data. This placeholder can be replaced
+ * with a true data feed in the future.
+ */
+function getSimulatedSocialSentiment(coinSymbol: string, coinName: string): string {
+    const sentiments = [
+        { type: "Bullish", text: `Positive regulatory news from the US; SEC rumored to be approving a spot ${coinName} ETF.` },
+        { type: "Bullish", text: `Major tech partnership announced for the ${coinName} blockchain, boosting adoption potential.` },
+        { type: "Bullish", text: `${coinName} is trending on X (Twitter) after a shoutout from a major tech influencer.` },
+        { type: "Bearish", text: `Concerns are growing about network congestion and high transaction fees on the ${coinName} network.` },
+        { type: "Bearish", text: `A competing blockchain just launched a 'vampire attack', trying to lure ${coinName}'s developers and users.` },
+        { type: "Bearish", text: `A large, early investor wallet has been moving a significant amount of ${coinSymbol} to exchanges, signaling a potential sell-off.` },
+        { type: "Neutral", text: `The market is quiet for ${coinName}, with trading volumes lower than average as investors await key inflation data later this week.` },
+    ];
+    const randomIndex = Math.floor(Math.random() * sentiments.length);
+    const selectedSentiment = sentiments[randomIndex];
+
+    return `Current Sentiment: ${selectedSentiment.type}. Key points: ${selectedSentiment.text}`;
+}
+
+
 export async function handleGenerateSignalsAction(
   coinSymbol: string,
   tradingTerm: TradingTerm,
+  availableCoins: CryptoCurrency[],
   customizationSettings?: string
 ): Promise<GenerateSignalsResult> {
   try {
-    // Fetch data only for the selected coinSymbol
+    const coinName = availableCoins.find(c => c.value === coinSymbol)?.name || coinSymbol;
+
+    // Fetch market data
     const fetchedData = await fetchRealCryptoData([coinSymbol]);
     
+    // Simulate fetching and summarizing social/news sentiment
+    const socialSentiment = getSimulatedSocialSentiment(coinSymbol, coinName);
+
     const input: GenerateTradingSignalsInput = {
       coinSymbol: coinSymbol, 
       tradingTerm: tradingTerm,
-      aggregatedData: fetchedData.aggregatedString, 
+      aggregatedData: fetchedData.aggregatedString,
+      socialSentiment: socialSentiment,
       customizationSettings: customizationSettings || undefined,
     };
 
-    // Artificial delay, you might remove or adjust this
+    // Artificial delay to simulate heavy processing
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     const signals = await generateTradingSignals(input);
@@ -90,4 +121,3 @@ export async function getAvailableCoinsAction(): Promise<GetAvailableCoinsResult
     return { coins: [], error: errorMessage };
   }
 }
-
