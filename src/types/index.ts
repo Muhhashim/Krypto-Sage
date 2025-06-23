@@ -6,6 +6,8 @@ export type TradingSignal = GenerateTradingSignalsOutput[0];
 export type LineChartDataPoint = {
   date: string;
   price: number;
+  volume: number;
+  sma?: number;
   name?: string; 
 };
 
@@ -15,6 +17,7 @@ export type CandlestickDataPoint = {
   high: number;
   low: number;
   close: number;
+  volume: number;
   name?: string;
 };
 
@@ -70,4 +73,3 @@ export interface CMCCoinMapResponse {
   };
   data: CMCCoinMapItem[];
 }
-
