@@ -73,3 +73,5 @@ export interface CMCCoinMapResponse {
   };
   data: CMCCoinMapItem[];
 }
+
+    
