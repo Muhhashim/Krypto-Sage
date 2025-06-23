@@ -18,7 +18,10 @@ const GenerateTradingSignalsInputSchema = z.object({
   tradingTerm: z.nativeEnum(TRADING_TERMS).describe('The trading term for the signals (SHORT_TERM, MEDIUM_TERM, LONG_TERM).'),
   aggregatedData: z
     .string()
-    .describe('Aggregated cryptocurrency data from various sources for the specified coinSymbol.'),
+    .describe('Aggregated cryptocurrency market data from various sources for the specified coinSymbol.'),
+  socialSentiment: z
+    .string()
+    .describe('A summary of recent news and social media sentiment for the cryptocurrency.'),
   customizationSettings: z
     .string()
     .optional()
@@ -33,7 +36,7 @@ const TradingSignalSchema = z.object({
   entryPrice: z.number().describe('The suggested numeric entry price for this future trading signal, appropriate for the specified trading term.'),
   targetPrice: z.number().describe('The suggested numeric target (take-profit) price for this future trading signal, appropriate for the specified trading term.'),
   stopLossPrice: z.number().describe('The suggested numeric stop-loss price for this future trading signal, appropriate for the specified trading term.'),
-  reason: z.string().describe('The rationale behind the trading signal, including key indicators or patterns relevant to the trading term.'),
+  reason: z.string().describe('The rationale behind the trading signal, including key indicators, market patterns, or sentiment analysis relevant to the trading term.'),
   supportingData: z.string().describe('Brief summary of data supporting the trading signal.'),
 });
 
@@ -56,26 +59,26 @@ const prompt = ai.definePrompt({
   },
   prompt: `You are an expert cryptocurrency trading signal generator specializing in FUTURE TRADING for {{coinSymbol}} based on a {{tradingTerm}} perspective.
 
-Analyze the provided aggregated cryptocurrency data for {{coinSymbol}} and generate potential future trading signals suitable for the specified {{tradingTerm}}.
-Consider technical indicators, market trends, and any provided customization settings.
+You must perform a deep analysis of the provided market data and social sentiment.
 
-Aggregated Data for {{coinSymbol}}: {{{aggregatedData}}}
-Trading Term: {{tradingTerm}}
-Customization Settings: {{{customizationSettings}}}
+1.  **Market Data for {{coinSymbol}}**: {{{aggregatedData}}}
+2.  **Trading Term**: {{tradingTerm}}
+3.  **Recent News & Social Sentiment**: {{{socialSentiment}}}
+4.  **Customization Settings**: {{{customizationSettings}}}
+
+Analyze the provided market data for technical indicators, volume, and price action. Crucially, you MUST correlate this technical analysis with the provided "Recent News & Social Sentiment" to understand the 'why' behind the market movements.
 
 Generate an array of trading signals. Each signal MUST be for future trading and MUST include:
 1.  signalType: "BUY" or "SELL".
-2.  sentiment: "BULLISH" or "BEARISH".
-3.  confidenceLevel: A number between 0 (low) and 1 (high).
-4.  entryPrice: A specific numeric suggested entry price, appropriate for the {{tradingTerm}} horizon.
-5.  targetPrice: A specific numeric suggested take-profit price, appropriate for the {{tradingTerm}} horizon.
-6.  stopLossPrice: A specific numeric suggested stop-loss price, appropriate for the {{tradingTerm}} horizon.
-7.  reason: Clear, concise rationale for the signal, mentioning key indicators or patterns (e.g., RSI, MACD crossover, support/resistance break) relevant to the {{tradingTerm}}.
-8.  supportingData: A brief summary of the data points from the aggregated data that support this signal.
+2.  sentiment: "BULLISH" or "BEARISH". This should be a combined result of technical analysis and the provided sentiment data.
+3.  confidenceLevel: A number between 0 (low) and 1 (high), influenced by how strongly the technicals and sentiment align.
+4.  entryPrice: A specific numeric suggested entry price.
+5.  targetPrice: A specific numeric suggested take-profit price.
+6.  stopLossPrice: A specific numeric suggested stop-loss price.
+7.  reason: Clear, concise rationale for the signal, mentioning BOTH key technical indicators (e.g., RSI, MACD) AND the news/sentiment that supports the analysis.
+8.  supportingData: A brief summary of the data points from the market and sentiment data that support this signal.
 
-Focus only on {{coinSymbol}}. Do not generate signals for other cryptocurrencies.
-Ensure all price fields (entryPrice, targetPrice, stopLossPrice) are numeric.
-The nature of these prices (e.g., how far apart entry and target are) should reflect the selected {{tradingTerm}}. For example, long-term signals might have wider price targets and stop losses compared to short-term signals.
+Focus only on {{coinSymbol}}. Ensure all price fields are numeric. The price ranges should reflect the selected {{tradingTerm}}.
 
 Output in JSON format.
 `,
